@@ -3,6 +3,7 @@
 - Fix bugs related to error handling of ongoing installations. (thanks to GB609)
 - Fix an issue where CJK characters in game library path prevents the config file from being loaded properly. (thanks to kyle-zhang-42)
 - Automatically add Weblate contributions to README and About dialog on release. (thanks to GB609)
+- Fixed some error messages not being displayed when an installation fails. (thanks to EmperorArthur)
 
 **1.4.0**
 - Various improvements to the download manager, including a pause function (thanks to GB609)

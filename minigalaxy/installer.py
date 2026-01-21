@@ -7,7 +7,6 @@ import subprocess
 import shutil
 import sys
 import textwrap
-import time
 
 from collections import deque
 from enum import Enum, auto
@@ -18,13 +17,14 @@ from minigalaxy.config import Config
 from minigalaxy.constants import GAME_LANGUAGE_IDS
 from minigalaxy.file_info import FileInfo
 from minigalaxy.game import Game
-from minigalaxy.logger import logger
+from minigalaxy.logger import logger as parent_logger
 from minigalaxy.translation import _
 from minigalaxy.launcher import get_execute_command, get_wine_path, wine_restore_game_link
 from minigalaxy.paths import CACHE_DIR, THUMBNAIL_DIR, APPLICATIONS_DIR, WINE_RES_PATH, DOWNLOAD_DIR
 
 
 INSTALL_QUEUE = None
+logger = parent_logger.getChild(__name__)
 
 
 def get_available_disk_space(location):
@@ -489,42 +489,39 @@ def uninstall_game(game):
         os.remove(path_to_shortcut)
 
 
-def _exe_cmd(cmd, print_output=False):
-    std_out = ""
-    std_err = ""
-    done = False
-    return_code = None
+def _exe_cmd(cmd: list[str], print_output: bool = False) -> tuple[str, str, int]:
+    """
+    Execute the given command, optionally printing the output.
+
+    :param list[str] cmd: See subprocess.Popen
+    :param bool print_output: Printi the output as the command runs.
+    :return: A tuple of (stdout, stderr, returncode) from the process.
+    """
+    run_once = False
+    output = ""
+    error_output = ""
     process = subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        universal_newlines=True, encoding="utf-8"
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8"
     )
-    os.set_blocking(process.stdout.fileno(), False)
-    os.set_blocking(process.stderr.fileno(), False)
-    while not done:
-        if std_line := process.stdout.readline():
-            std_out += std_line
-            if print_output:
-                print(std_line, end='')
-
-        if err_line := process.stderr.readline():
-            std_err += err_line
-            if print_output:
-                print(err_line, end='')
-
-        # continue the loop until there is
-        # 1. a return code and
-        # 2. nothing more to consume
-        # this makes sure everything was read
-        time.sleep(0.02)
-        return_code = process.poll()
-        line_read = len(std_line) + len(err_line)
-        done = return_code is not None and line_read == 0
-
-    process.stdout.close()
-    process.stderr.close()
-
-    return std_out, std_err, return_code
+    while process.returncode is None or not run_once:
+        run_once = True
+        stdout = ""
+        stderr = ""
+        try:
+            stdout, stderr = process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+        output += stdout
+        error_output += stderr
+        if print_output:
+            print(stdout, end='')
+            print(stderr, end='', file=sys.stderr)
+    logger.debug("_exe_cmd(%s) returned (%s, %s, %i)",
+                 cmd, output, error_output, process.returncode)
+    return output, error_output, process.returncode
 
 
 def _mv(source_dir, target_dir):
